@@ -1,0 +1,6 @@
+recaptcha_modal.recaptcha_modal_config_form:
+  title: 'reCAPTCHA Settings'
+  route_name: recaptcha_modal.recaptcha_modal_config_form
+  description: 'Manage reCAPTCHA settings for custom forms.'
+  parent: system.admin_config_services
+  weight: 99

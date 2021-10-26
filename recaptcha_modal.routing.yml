@@ -1,0 +1,9 @@
+recaptcha_modal.recaptcha_modal_config_form:
+  path: '/admin/config/services/recaptcha'
+  defaults:
+    _form: '\Drupal\recaptcha_modal\Form\RecaptchaModalConfigForm'
+    _title: 'reCAPTCHA Settings'
+  requirements:
+    _permission: 'manage recaptcha settings'
+  options:
+    _admin_route: TRUE

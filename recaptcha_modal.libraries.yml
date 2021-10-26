@@ -1,0 +1,11 @@
+recaptcha:
+  js:
+    js/dist/app.js: {}
+    //www.google.com/recaptcha/api.js?&render=explicit: { 'external': true, 'attributes': { 'async': true, 'defer': true } }
+  css:
+    layout:
+      css/recaptcha_modal.css: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/drupal.ajax

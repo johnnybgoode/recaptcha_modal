@@ -1,0 +1,257 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations for recaptcha_modal.module.
+ */
+
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Element;
+use Drupal\Component\Utility\NestedArray;
+use Drupal\recaptcha_modal\Ajax\RecaptchaModalCommand;
+use Drupal\recaptcha_modal\Ajax\ModalDisplayCommand;
+use Drupal\recaptcha_modal\Ajax\ModalHideCommand;
+use Drupal\recaptcha_modal\RequestMethod\RecaptchaRequest;
+use Drupal\key\Entity\Key;
+use ReCaptcha\ReCaptcha;
+
+/**
+ * Implements hook_theme_suggestions_HOOK_alter().
+ */
+function recaptcha_modal_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $enabled_forms = [];
+
+  if (\Drupal::moduleHandler()->moduleExists('recaptcha_modal_test')) {
+    $enabled_forms[] = 'recaptcha_modal_test_form';
+  }
+
+  if (!in_array($form_id, $enabled_forms)) {
+    return;
+  }
+
+  recaptcha_modal_add_challenge($form, $form_id);
+}
+
+/**
+ * Register the recaptcha challenge on the form.
+ */
+function recaptcha_modal_add_challenge(&$form, $form_id) {
+  $form_id = str_replace('_', '-', $form_id);
+
+  $form['#prefix'] = sprintf('<div id="%s-wrapper">', $form_id);
+  $form['#suffix'] = '</div>';
+
+  $form['recaptcha_token'] = [
+    '#type' => 'textfield',
+    '#attributes' => [
+      'class' => ['js-hide', 'recaptcha-modal-token'],
+      'autocomplete' => 'off',
+      'aria-label' => t('Recaptcha Token'),
+    ],
+    '#ajax' => [
+      'event' => 'change',
+      'wrapper' => sprintf('%s-wrapper', $form_id),
+      'callback' => 'recaptcha_modal_token_callback',
+      'trigger_as' => [
+        'name' => 'submit',
+        'value' => 'Submit',
+      ],
+    ],
+    '#maxlength' => 1024,
+  ];
+
+  $form['recaptcha_wrapper'] = [
+    '#type' => 'container',
+    '#attributes' => [
+      'class' => ['js-hide', 'recaptcha-modal-wrapper'],
+    ],
+    'recaptcha_heading' => [
+      '#type' => 'html_tag',
+      '#tag' => 'h2',
+      '#value' => t('Please check the box below to proceed.'),
+    ],
+    'recaptcha_container' => [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['recaptcha-modal-container'],
+      ],
+    ],
+  ];
+  $form['#attached']['library'][] = 'recaptcha_modal/recaptcha';
+  $form['#attached']['drupalSettings']['recaptcha_modal'] = [
+    'recaptcha_site_key' => \Drupal::config('recaptcha_modal.settings')->get('recaptcha_site_key'),
+    'forms' => [$form_id => $form_id],
+  ];
+
+  // Clone the submit button and add our ajax callbacks.
+  $submit_parents = recaptcha_modal_find_submit($form);
+  if (is_null($submit_parents)) {
+    return;
+  }
+  $submit_parents = explode('][', $submit_parents);
+  $submit = NestedArray::getValue($form, $submit_parents);
+
+  if (empty($submit)) {
+    return;
+  }
+
+  $ajax_submit = $submit;
+  $ajax_submit['#ajax'] = [
+    'wrapper' => sprintf('%s-wrapper', $form_id),
+    'callback' => 'recaptcha_modal_submit_callback',
+    'event' => 'click',
+  ];
+  $ajax_submit['#submit'] = ['recaptcha_modal_empty_submit'];
+  $ajax_submit['#weight'] = 0;
+
+  $ajax_submit_parents = array_slice($submit_parents, 0, -1);
+  $ajax_submit_parents[] = 'ajax_submit';
+
+  NestedArray::setValue($form, $ajax_submit_parents, $ajax_submit);
+
+  $submit['#name'] = 'submit';
+  $submit['#prefix'] = '<div class="js-hide">';
+  $submit['#suffix'] = '</div>';
+  $submit['#attributes']['class'][] = 'js-hide';
+  if (isset($submit['#ajax']['callback'])) {
+    $submit['#ajax']['orig_callback'] = $submit['#ajax']['callback'];
+  }
+  $submit['#recaptcha_modal_validate'] = 1;
+  $submit['#ajax']['callback'] = 'recaptcha_modal_token_callback';
+  $submit['#weight'] = 1;
+
+  NestedArray::setValue($form, $submit_parents, $submit);
+
+  array_unshift($form['#validate'], 'recaptcha_modal_validate_token');
+}
+
+/**
+ * Ajax callback function for the recaptcha_token input.
+ */
+function recaptcha_modal_token_callback($form, FormStateInterface $form_state) {
+  $orig_callback = NULL;
+  $triggering_element = $form_state->getTriggeringElement();
+  if (isset($triggering_element['#ajax']['orig_callback'])) {
+    $orig_callback = $triggering_element['#ajax']['orig_callback'];
+  }
+
+  $orig_callback = $form_state->prepareCallback($orig_callback);
+  $result = NULL;
+
+  if (!empty($orig_callback) && is_callable($orig_callback)) {
+    $request = \Drupal::request();
+    $result = call_user_func_array($orig_callback, [&$form, &$form_state, $request]);
+  }
+
+  if (!is_null($result) && $result instanceof AjaxResponse) {
+    $response = $result;
+  }
+  else {
+    $response = new AjaxResponse();
+  }
+
+  $wrapper_id = sprintf('#%s-wrapper', str_replace('_', '-', $form['#form_id']));
+
+  // Add our commands before any original commands.
+  // The order of these commands is reversed because they are prepended.
+  $response->addCommand(new ReplaceCommand($wrapper_id, $form), TRUE);
+  $response->addCommand(new ModalHideCommand(sprintf('%s .recaptcha-modal-wrapper', $wrapper_id)), TRUE);
+
+  return $response;
+}
+
+/**
+ * Ajax callback function for the ajax_submit button.
+ */
+function recaptcha_modal_submit_callback($form, FormStateInterface $form_state) {
+  if ($form_state->hasAnyErrors()) {
+    return $form;
+  }
+
+  $response = new AjaxResponse();
+
+  $response->addCommand(new ReplaceCommand(NULL, $form));
+  $response->addCommand(new RecaptchaModalCommand($form['#id']));
+  $response->addCommand(new ModalDisplayCommand(sprintf('#%s .recaptcha-modal-wrapper', $form['#id'])));
+
+  return $response;
+}
+
+/**
+ * Submit callback for the ajax_submit button.
+ *
+ * Assigning this handler to the ajax_submit button prevents
+ * the form's registered #submit functions from firing until
+ * the recaptcha is verified.
+ */
+function recaptcha_modal_empty_submit(&$form, FormStateInterface $form_state) {
+  return;
+}
+
+/**
+ * Validate that a recaptcha token is included in the submission.
+ */
+function recaptcha_modal_validate_token(&$form, FormStateInterface $form_state) {
+  $triggering_element = $form_state->getTriggeringElement();
+  if (empty($triggering_element['#recaptcha_modal_validate'])) {
+    return;
+  }
+
+  $token = $form_state->getValue('recaptcha_token');
+
+  $secret_key_id = \Drupal::config('recaptcha_modal.settings')->get('recaptcha_secret_key');
+  $secret_key = \Drupal::service('key.repository')->getKey($secret_key_id);
+
+  if (empty($token) || !($secret_key instanceof Key)) {
+    return FALSE;
+  }
+
+  $recaptcha = new ReCaptcha($secret_key->getKeyValue(), new RecaptchaRequest());
+  $request = \Drupal::request();
+
+  // Ensures the hostname matches. Required if "Domain Name Validation" is
+  // disabled for credentials.
+  $recaptcha->setExpectedHostname($request->getHost());
+
+  $response = $recaptcha->verify($token, $request->getClientIp());
+
+  if ($response->isSuccess()) {
+    return TRUE;
+  }
+  else {
+    // Generic message since normal users should always pass the captcha.
+    $form_state->setError($form, t('There was an error processing your request, please try again later.'));
+  }
+
+  return FALSE;
+}
+
+/**
+ * Recursively find submit button.
+ */
+function recaptcha_modal_find_submit(&$element, $parents = '', &$parent_path = '') {
+  $children = Element::children($element);
+  if (!empty($children)) {
+    foreach ($children as $child) {
+      if (!empty($parents)) {
+        $join_parents = join('][', [$parents, $child]);
+      }
+      else {
+        $join_parents = $child;
+      }
+
+      if (isset($element[$child]['#recaptcha_modal']) && isset($element[$child]['#type']) && $element[$child]['#type'] == 'submit') {
+        $parent_path = $join_parents;
+        return;
+      }
+      else {
+        recaptcha_modal_find_submit($element[$child], $join_parents, $parent_path);
+      }
+    }
+  }
+  if (!empty($parent_path)) {
+    return $parent_path;
+  }
+}

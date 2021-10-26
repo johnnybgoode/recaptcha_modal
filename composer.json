@@ -1,0 +1,14 @@
+{
+    "name": "johnnybgoode/recaptcha_modal",
+    "description": "ReCAPTCHA in a Modal",
+    "type": "drupal-custom-module",
+    "require": {
+        "google/recaptcha": "^1.2"
+    },
+    "authors": [
+        {
+            "name": "John Entwistle",
+            "homepage": "https://www.drupal.org/u/johnnybgoode"
+        }
+    ]
+}

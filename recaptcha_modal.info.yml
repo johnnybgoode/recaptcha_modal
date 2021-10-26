@@ -1,0 +1,8 @@
+name: 'ReCAPTCHA Modal'
+type: module
+description: 'Provides reCAPTCHA integration in an interstitial modal.'
+core_version_requirement: ^8 || ^9
+package: 'Custom'
+version: 8.x-1.0
+dependencies:
+  - key:key

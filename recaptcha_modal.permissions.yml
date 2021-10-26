@@ -1,0 +1,3 @@
+manage recaptcha settings:
+  title: 'Manage reCAPTCHA settings'
+  description: 'Manage reCAPTCHA configuration for custom forms.'
