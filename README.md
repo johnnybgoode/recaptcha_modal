@@ -17,3 +17,8 @@ This module allows developers to embed a ReCAPTCHA v2 challenge into any form as
 1. Enable the 'Recaptcha Modal Test' module
 2. Navigate to '/tests/recaptcha_modal'
 3. Fill out the form and verify that the reCAPTCHA challenge is presented before the success message is displayed.
+
+## Developer Instructions
+1. Implement `hook_recaptcha_modal_enabled_forms_alter` to enable the challenge on specific forms.
+2. Edit the enabled forms and add the render key `#recaptcha_modal` to the submit button which should trigger the modal. This is usually the main submit button but may be one or more other buttons on a complex form.
+3. See the included `recaptcha_modal_test` module as an example.
