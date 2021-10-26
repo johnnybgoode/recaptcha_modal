@@ -1,0 +1,8 @@
+name: 'ReCAPTCHA Modal Test'
+type: module
+description: 'Testing module for the reCAPTCHA modal module.'
+core_version_requirement: ^8 || ^9
+package: 'Custom'
+version: 8.x-1.0
+dependencies:
+  - recaptcha_modal:recaptcha_modal
