@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations for recaptcha_modal_test.module.
+ */
+
+/**
+ * Implements hook_recaptcha_modal_enabled_forms_alter().
+ */
+function recaptcha_modal_test_recaptcha_modal_enabled_forms_alter(&$enabled_forms) {
+  $enabled_forms[] = 'recaptcha_modal_test_form';
+}

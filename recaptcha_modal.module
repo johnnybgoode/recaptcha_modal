@@ -18,14 +18,12 @@ use Drupal\key\Entity\Key;
 use ReCaptcha\ReCaptcha;
 
 /**
- * Implements hook_theme_suggestions_HOOK_alter().
+ * Implements hook_form_alter().
  */
 function recaptcha_modal_form_alter(&$form, FormStateInterface $form_state, $form_id) {
   $enabled_forms = [];
 
-  if (\Drupal::moduleHandler()->moduleExists('recaptcha_modal_test')) {
-    $enabled_forms[] = 'recaptcha_modal_test_form';
-  }
+  \Drupal::moduleHandler()->alter('recaptcha_modal_enabled_forms', $enabled_forms);
 
   if (!in_array($form_id, $enabled_forms)) {
     return;
